@@ -89,28 +89,6 @@ def make_ev_maps(dts, x, eig_vectors, coefs, res=None, name='q', abs_cor=False, 
         dt.save_data(save_sns='overall', save_data_keys=['attrs'], save_sub_keys=[f'evs_{name}', f'ev_{name}'], quiet=True)
         dt.save_data(save_sns='overall', save_data_keys=['maps'], save_sub_keys=maps, quiet=True)
         
-def check_ev_tomos(dt, ev_tag, ref_tomo='absorption', quiet=True):
-    """ NOTE: OBSOLETE
-              tomopy handles numberical values correctly; early versions of ganrec did not
-              offset is due to incorrect rotation center
-       
-        scale the magnitude based on the values from the sinogram
-        shift the tomo based on the ref_tomo
-        these are necessary when the tomograms are reconstructed using different algorithms
-    """
-    grp = dt.proc_data['overall']
-    tm0 = grp['tomo'][ref_tomo].d
-    keys = [k for k in grp['tomo'].keys() if k[:2]=='ev' and ev_tag in k]
-    
-    for k in keys:
-        tm1 = grp['tomo'][k].d*np.nansum(grp['maps'][k].d)/np.nansum(grp['tomo'][k].d)
-        tm1[np.isnan(tm1)] = 0
-        
-        shift = pcc(tm0, tm1)[0]
-        grp['tomo'][k].d = scipy.ndimage.shift(tm1, shift)
-        
-    dt.save_data(save_sns='overall', save_data_keys=['tomo'], save_sub_keys=keys, quiet=quiet)
-    
 def recombine(coef, method="nmf"):
     """ coef should have the same dimension as dt.proc_data['overall']['attrs'][f'evs_{method}'].shape[1]
     """
@@ -122,7 +100,7 @@ def recombine(coef, method="nmf"):
     
 
 class ComponentSeparator:
-    def __init__(self, datasets, qmask=None, datakey="Iq", subkey="subtracted"):
+    def __init__(self, datasets, sc=1., qmask=None, datakey="Iq", subkey="subtracted"):
         """ datasets should be of the type h5xs_an
             each dataset should have the require data present, with the same qgrid
             use qmask to control which part of the scattering profile to be included in component separation
@@ -134,10 +112,11 @@ class ComponentSeparator:
         self.qmask = qmask
         self.dk = datakey
         self.sk = subkey
+        self.sc = sc
         self.data1d = self.get_data()
     
     def get_data(self):
-        return np.vstack([dt.proc_data['overall'][self.dk][self.sk][:,self.qmask] for dt in self.dts])
+        return np.vstack([(dt.proc_data['overall'][self.dk][self.sk]*self.sc)[:,self.qmask] for dt in self.dts])
 
     def change_qmask(self, qmask):
         """ update the data used for component separation
