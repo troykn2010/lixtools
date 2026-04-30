@@ -106,7 +106,8 @@ class h5xs_fiber(h5xs_an):
         for key in box_params['peaks'].keys():
             peak = box_params['peaks'][key]
             bounds = [(0,1),(q0*peak['relative_qmin'],q0*peak['relative_qmax']),(peak['absolute_smin'],peak['absolute_smax']) ] #bounds on single gaussian fit
-            LineData.FitSingleGaussian(LineData.q,LineData.filtered_values,label = key,maxiter = 1000,bounds = bounds) #initial fits
+            bool = np.logical_and(LineData.q>=q0*peak['relative_qmin'],LineData.q<q0*peak['relative_qmax'])
+            LineData.FitSingleGaussian(LineData.q[bool],LineData.filtered_values[bool],label = key,maxiter = 1000,bounds = bounds) #initial fits
             LineData.peaks[key]['smin'] = peak['absolute_smin']
             LineData.peaks[key]['smax'] = peak['absolute_smax']
         for update_keys in box_params['update_keys']:
@@ -176,6 +177,12 @@ class h5xs_fiber(h5xs_an):
             self.add_proc_data('overall','merged',box['label']+'/fits'        ,LineData.fitted_values)
             self.add_proc_data('overall','merged',box['label']+'/q(angstrom-1)',LineData.q)
             self.add_proc_data('overall','merged',box['label']+'/d(nm)',c/LineData.q)
+
+            a = np.trapezoid(LineData.filtered_values*LineData.q/c ,LineData.q/c)
+            b = np.trapezoid(LineData.filtered_values ,LineData.q/c)
+            self.add_proc_data('overall','merged',box['label']+'/TotalArea(count nm-1)',np.array(b))
+            self.add_proc_data('overall','merged',box['label']+'/d_COM(nm)',np.array(b/a))
+
             for key in box['peaks'].keys():
                 self.add_proc_data('overall','merged',box['label']+'/' + key + '/' + 'dspacing(nm)', np.array(c/LineData.peaks[key]['m1']))
                 self.add_proc_data('overall','merged',box['label']+'/' + key + '/' + 'sigma(nm-1)', np.array(LineData.peaks[key]['m2']/c))
@@ -423,7 +430,7 @@ def Align(image,negativemask,phi = None,align_threshold = 5):
 def monotonic(q,y):
     z = y
     q = np.append(q,[0.99*q.min(),1.01*q.max()])
-    z = np.append(z,[2*z.max(),2*z.max()])
+    z = np.append(z,[2*z.max()+1e-12,2*z.max()+1e-12])
     points = np.array([q,z]).transpose()
     hull = ConvexHull(points)
     hullpoints = np.array([[points[vertex, 0], points[vertex, 1]] for vertex in hull.vertices ])
